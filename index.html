@@ -118,6 +118,24 @@ button{font:inherit;color:inherit;cursor:pointer}
 .fchip.on{background:var(--hl);color:var(--ink)}
 .fchip.on .fm{background:var(--c);border-color:var(--edge)}
 .mrows{display:grid;gap:10px}
+.deck{display:flex;flex-direction:column;gap:6px}
+.deckn{display:flex;align-items:center;gap:14px}
+.deckn b{font-size:52px;font-weight:900;line-height:1;min-width:56px}
+.deckn span{font-size:17px;color:var(--ink-soft);line-height:1.25}
+.deck .tools{margin:8px 0 0}
+.fc{perspective:1200px;width:100%}
+.fcard{position:relative;width:100%;height:clamp(350px,56vh,430px);transform-style:preserve-3d;transition:transform .45s;cursor:pointer;border-radius:22px}
+.fcard.flip{transform:rotateY(180deg)}
+.fface{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px;
+  background:var(--card);border:2.5px solid var(--edge);border-radius:22px;box-shadow:5px 5px 0 var(--shadow);
+  backface-visibility:hidden;-webkit-backface-visibility:hidden;text-align:center}
+.fface.back{transform:rotateY(180deg);background:var(--hl)}
+.fen{display:flex;align-items:center;gap:12px;font-size:22px;font-weight:800;color:var(--ink-soft)}
+.fcard:focus-visible{outline:3px solid var(--blue);outline-offset:4px}
+.fhint{margin:14px 0 0;text-align:center;color:var(--ink-soft);font-size:15px}
+.fcbtns{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.btn.again{background:var(--bad-bg);border-color:var(--pen)}
+.btn.know{background:var(--ok-bg);border-color:var(--ok)}
 .mrow{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:start}
 .mname{min-height:42px;padding:6px 8px;border:2.5px solid var(--edge);border-radius:12px;background:var(--paper);color:var(--ink-soft);font-weight:900;font-size:15px;text-align:left}
 .mname.on{background:var(--ink);color:var(--paper)}
@@ -282,7 +300,8 @@ GROUPS.push(
   mk("monday","Monday","понедельник"),mk("tuesday","Tuesday","вторник"),mk("wednesday","Wednesday","среда"),mk("thursday","Thursday","четверг"),mk("friday","Friday","пятница"),mk("saturday","Saturday","суббота"),mk("sunday","Sunday","воскресенье")]},
  {id:'m8b',mod:'Module 8',title:'16a, 16b',ru:'Распорядок дня',color:'#3F51B5',on:'#FFFFFF',words:[
   mk("go_to_bed","go to bed","ложиться спать"),mk("have_breakfast","have breakfast","завтракать"),mk("have_lunch","have lunch","обедать"),mk("visit","visit","навещать, ходить в гости"),mk("have_a_shower","have a shower","принимать душ"),mk("listen_to_music","listen to music","слушать музыку"),mk("have_supper","have supper","ужинать"),mk("in_the_morning","in the morning","утром"),mk("in_the_afternoon","in the afternoon","днём"),mk("in_the_evening","in the evening","вечером"),mk("at_night","at night","ночью")]});
-const MIXG={id:'mix',mod:'Mix',title:'Mix',ru:'20 случайных слов из всех модулей',color:'#FFC93C',on:'#1B2A4A',words:[]};
+const MIXMAX=50;
+const MIXG={id:'mix',mod:'Mix',title:'Mix',ru:'Флэш-карточки · до 50 слов',color:'#FFC93C',on:'#1B2A4A',words:[]};
 GROUPS.forEach(g=>g.words.forEach(w=>{w.g=g.id;}));
 const ALL=GROUPS.reduce((a,g)=>a.concat(g.words),[]);
 const GM=id=>id==='mix'?MIXG:GROUPS.find(g=>g.id===id);
@@ -319,6 +338,7 @@ function pic(w,size){
   return box;
 }
 const norm=s=>s.toLowerCase().replace(/\s+/g,' ').trim();
+const pl=n=>{const a=n%100,b=n%10;return(b===1&&a!==11)?'слово':(b>=2&&b<=4&&(a<12||a>14))?'слова':'слов';};
 const markOf=p=>p>=90?5:p>=70?4:p>=50?3:2;
 
 /* ---------- progress ---------- */
@@ -368,13 +388,10 @@ function mixSel(){
 }
 function saveSel(sel){MIXOFF=GROUPS.map(g=>g.id).filter(x=>sel.indexOf(x)<0);try{localStorage.setItem('vocab3_mixoff',JSON.stringify(MIXOFF));}catch(e){}}
 function rollMix(){
-  const sel=mixSel();
-  const pools=GROUPS.filter(g=>sel.indexOf(g.id)>=0).map(g=>shuffle(g.words));const out=[];let r=0;
-  while(out.length<20){let added=false;
-    pools.forEach(p=>{if(r<p.length&&out.length<20){out.push(p[r]);added=true;}});
-    if(!added)break;r++;}
-  MIXG.words=shuffle(out);PROG.mix={};
-  MIXG.ru=out.length<20?'Все слова выбранных разделов':'20 случайных слов из выбранных разделов';
+  const sel=mixSel();const pool=[];
+  GROUPS.forEach(g=>{if(sel.indexOf(g.id)>=0)g.words.forEach(w=>pool.push(w));});
+  MIXG.pool=pool.length;
+  MIXG.words=shuffle(pool).slice(0,MIXMAX);
 }
 const wordsOf=gid=>GM(gid).words;
 
@@ -392,19 +409,20 @@ function groupCard(g){
   else mos=g.words.slice(0,3).map(w=>pic(w,'xs'));
   const dots=[];for(let l=1;l<=7;l++)dots.push(h('i',{class:prog(g.id,l)!=null?'on':''}));
   const count=g.id==='mix'?'':' · '+g.words.length+' '+(g.words.length%10===1&&g.words.length!==11?'слово':(g.words.length%10>=2&&g.words.length%10<=4&&(g.words.length<10||g.words.length>20))?'слова':'слов');
-  return h('button',{class:'card',style:'--c:'+g.color,onclick:()=>{if(g.id==='mix')rollMix();levelsScreen(g.id);}},
+  return h('button',{class:'card',style:'--c:'+g.color,onclick:()=>{if(g.id==='mix'){rollMix();mixScreen();}else levelsScreen(g.id);}},
     h('div',{class:'mos'},mos),
     h('div',{class:'ct'},h('b',null,g.title),h('span',null,g.ru+count)),
     g.id==='mix'?h('div',{class:'dots'},[]):h('div',{class:'dots','aria-hidden':'true'},dots));
 }
 function home(){
-  stopAudio();G=null;
+  stopAudio();G=null;F=null;
   const sec=(name,list)=>h('section',{class:'sec'},h('h2',{class:'hand'},name),h('div',{class:'grid'},list.map(groupCard)));
   render(null,'',[
     h('header',{class:'hero'},
       h('h1',{class:'hand'},'Мой словарик'),
-      h('p',null,'Английский, 3 класс. В каждом разделе 7 уровней: от знакомства со словами до диктанта.'),
+      h('p',null,'Английский, 3 класс. В каждом разделе 7 уровней: от знакомства со словами до диктанта. А в Mix — флэш-карточки со словами из любых разделов.'),
       TTS.ok?null:h('div',{class:'note'},'На этом устройстве нет озвучки слов — попробуй другой браузер.')),
+    sec('Mix',[MIXG]),
     sec('Module 1',[GM('m1a'),GM('m1b'),GM('m1n')]),
     sec('Module 2',[GM('m2'),GM('m2c'),GM('m2p')]),
     sec('Module 3',[GM('m3a'),GM('m3b')]),
@@ -412,14 +430,14 @@ function home(){
     sec('Module 5',[GM('m5a'),GM('m5b')]),
     sec('Module 6',[GM('m6a'),GM('m6b')]),
     sec('Module 7',[GM('m7a'),GM('m7b')]),
-    sec('Module 8',[GM('m8a'),GM('m8b')]),
-    sec('Mix',[MIXG])
+    sec('Module 8',[GM('m8a'),GM('m8b')])
   ]);
 }
 
 /* ---------- levels ---------- */
 function levelsScreen(gid){
-  stopAudio();G=null;const g=GM(gid);
+  if(gid==='mix')return mixScreen();
+  stopAudio();G=null;F=null;const g=GM(gid);
   const items=[];
   for(let l=1;l<=7;l++){
     const p=prog(gid,l);let badge;
@@ -428,37 +446,115 @@ function levelsScreen(gid){
     items.push(h('button',{class:'lv',onclick:()=>startLevel(gid,l)},
       h('div',{class:'lvn'},String(l)),h('div',null,h('b',null,LV[l].n),h('span',null,LV[l].d)),badge));
   }
-  let tools=null;
-  if(gid==='mix'){
-    const sel=mixSel();
-    const toggle=id=>{let n=sel.slice();const i=n.indexOf(id);if(i>=0){if(n.length>1)n.splice(i,1);}else n.push(id);saveSel(n);rollMix();levelsScreen('mix');};
-    const apply=n=>{saveSel(n);rollMix();levelsScreen('mix');};
-    const mods=[];GROUPS.forEach(x=>{if(mods.indexOf(x.mod)<0)mods.push(x.mod);});
-    const rows=mods.map(md=>{
-      const gs=GROUPS.filter(x=>x.mod===md);const onN=gs.filter(x=>sel.indexOf(x.id)>=0).length;
-      const modToggle=()=>{
-        const ids=gs.map(x=>x.id);let n;
-        if(onN===gs.length){n=sel.filter(x=>ids.indexOf(x)<0);if(!n.length)return;}
-        else n=sel.filter(x=>ids.indexOf(x)<0).concat(ids);
-        apply(n);};
-      const chips=gs.map(x=>h('button',{class:'fchip'+(sel.indexOf(x.id)>=0?' on':''),style:'--c:'+x.color,'aria-pressed':sel.indexOf(x.id)>=0?'true':'false',onclick:()=>toggle(x.id)},
-        h('span',{class:'fm'},sel.indexOf(x.id)>=0?'✓':''),x.title));
-      return h('div',{class:'mrow'},
-        h('button',{class:'mname'+(onN===gs.length?' on':onN?' part':''),'aria-pressed':onN===gs.length?'true':'false',title:'Весь модуль',onclick:modToggle},md),
-        h('div',{class:'chips'},chips));
-    });
-    const allOn=sel.length===GROUPS.length;
-    tools=h('div',{class:'mixbox'},
-      h('div',{class:'mixh'},h('b',null,'Из каких разделов брать слова'),
-        h('button',{class:'lnk',onclick:()=>apply(allOn?[GROUPS[0].id]:GROUPS.map(x=>x.id))},allOn?'Снять все':'Выбрать все')),
-      h('div',{class:'mrows'},rows),
-      h('div',{class:'tools'},h('button',{class:'btn',onclick:()=>{rollMix();levelsScreen('mix');}},'🎲 Выбрать другие слова')));
-  }
+  const tools=null;
   render(g,'',[
     h('div',{class:'top'},h('button',{class:'ic','aria-label':'Назад',html:BACK,onclick:home}),
       h('h2',null,gid==='mix'?'Mix':g.mod+' · '+g.title,h('small',null,g.ru+' · '+g.words.length+' слов'))),
     tools,h('div',{class:'lvgrid'},items)]);
 }
+
+/* ---------- mix: settings + flashcards ---------- */
+let F=null;
+function mixScreen(){
+  stopAudio();G=null;F=null;
+  if(!MIXG.words.length)rollMix();
+  const sel=mixSel();const n=MIXG.words.length;
+  const toggle=id=>{let k=sel.slice();const i=k.indexOf(id);if(i>=0){if(k.length>1)k.splice(i,1);}else k.push(id);apply(k);};
+  const apply=k=>{saveSel(k);rollMix();mixScreen();};
+  const mods=[];GROUPS.forEach(x=>{if(mods.indexOf(x.mod)<0)mods.push(x.mod);});
+  const rows=mods.map(md=>{
+    const gs=GROUPS.filter(x=>x.mod===md);const onN=gs.filter(x=>sel.indexOf(x.id)>=0).length;
+    const modToggle=()=>{
+      const ids=gs.map(x=>x.id);let k;
+      if(onN===gs.length){k=sel.filter(x=>ids.indexOf(x)<0);if(!k.length)return;}
+      else k=sel.filter(x=>ids.indexOf(x)<0).concat(ids);
+      apply(k);};
+    const chips=gs.map(x=>h('button',{class:'fchip'+(sel.indexOf(x.id)>=0?' on':''),style:'--c:'+x.color,'aria-pressed':sel.indexOf(x.id)>=0?'true':'false',onclick:()=>toggle(x.id)},
+      h('span',{class:'fm'},sel.indexOf(x.id)>=0?'✓':''),x.title));
+    return h('div',{class:'mrow'},
+      h('button',{class:'mname'+(onN===gs.length?' on':onN?' part':''),'aria-pressed':onN===gs.length?'true':'false',title:'Весь модуль',onclick:modToggle},md),
+      h('div',{class:'chips'},chips));
+  });
+  const allOn=sel.length===GROUPS.length;
+  const info=n<MIXMAX?'Все слова выбранных разделов: '+n+' '+pl(n):'Случайные '+n+' '+pl(n)+' из '+MIXG.pool;
+  render(MIXG,'',[
+    h('div',{class:'top'},h('button',{class:'ic','aria-label':'Назад',html:BACK,onclick:home}),
+      h('h2',null,'Mix',h('small',null,'Флэш-карточки'))),
+    h('div',{class:'mixbox deck'},
+      h('div',{class:'deckn'},h('b',null,String(n)),h('span',null,info)),
+      h('div',{class:'tools'},
+        h('button',{class:'btn primary',onclick:()=>flashPass(MIXG.words)},'Начать карточки'),
+        h('button',{class:'btn',onclick:()=>{rollMix();mixScreen();}},'🎲 Перемешать заново'))),
+    h('div',{class:'mixbox'},
+      h('div',{class:'mixh'},h('b',null,'Из каких разделов брать слова'),
+        h('button',{class:'lnk',onclick:()=>apply(allOn?[GROUPS[0].id]:GROUPS.map(x=>x.id))},allOn?'Снять все':'Выбрать все')),
+      h('div',{class:'mrows'},rows))
+  ]);
+}
+function flashPass(words){
+  stopAudio();
+  F={deck:words.slice(),total:words.length,i:0,flipped:false,known:[],again:[],done:false};
+  F.bar=h('i');F.count=h('div',{class:'count'});F.stage=h('div',{class:'fc'});
+  F.hint=h('p',{class:'fhint'});
+  F.bAgain=h('button',{class:'btn again',onclick:()=>flashAnswer(false)},'Повторить');
+  F.bKnow=h('button',{class:'btn know',onclick:()=>flashAnswer(true)},'Знаю');
+  const snd=h('button',{class:'ic',title:'Озвучка слов','aria-label':'Озвучка слов',onclick:()=>{AUTO=!AUTO;snd.textContent=AUTO?'🔊':'🔇';try{localStorage.setItem('vocab3_snd',AUTO?'1':'0');}catch(e){}}},AUTO?'🔊':'🔇');
+  render(MIXG,'narrow',[
+    h('div',{class:'top'},h('button',{class:'ic','aria-label':'К выбору разделов',html:BACK,onclick:mixScreen}),
+      h('h2',null,'Mix · карточки',h('small',null,F.total+' '+pl(F.total))),snd),
+    h('div',{class:'progrow'},h('div',{class:'prog'},F.bar),F.count),
+    F.stage,F.hint,h('div',{class:'fcbtns'},F.bAgain,F.bKnow)]);
+  flashCard();
+}
+function flashCard(){
+  const w=F.deck[F.i];F.flipped=false;
+  F.bar.style.width=(F.i/F.deck.length*100)+'%';
+  F.count.textContent=(F.i+1)+' / '+F.deck.length;
+  const sp=()=>h('button',{class:'say sm','aria-label':'Послушать',html:SPK,onclick:e=>{e.stopPropagation();speakText(audioList(w));}});
+  const front=h('div',{class:'fface'},pic(w,'lg'),h('div',{class:'big'},w.disp),sp());
+  const back=h('div',{class:'fface back','aria-hidden':'true'},pic(w,'md'),h('div',{class:'big'},w.ru),h('div',{class:'fen'},w.disp,sp()));
+  F.card=h('div',{class:'fcard',role:'button',tabindex:'0','aria-label':'Перевернуть карточку',
+    onclick:flashFlip,onkeydown:e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();flashFlip();}}},front,back);
+  F.front=front;F.back=back;
+  F.stage.replaceChildren(F.card);
+  F.hint.textContent='Нажми на карточку, чтобы увидеть перевод';
+  if(AUTO)setTimeout(()=>{if(F&&F.card&&F.deck[F.i]===w&&!F.flipped)speakText(audioList(w));},250);
+}
+function flashFlip(){
+  if(!F||F.done)return;
+  F.flipped=!F.flipped;F.card.classList.toggle('flip',F.flipped);
+  F.front.setAttribute('aria-hidden',F.flipped?'true':'false');F.back.setAttribute('aria-hidden',F.flipped?'false':'true');
+  F.hint.textContent=F.flipped?'Знаешь это слово?':'Нажми на карточку, чтобы увидеть перевод';
+}
+function flashAnswer(known){
+  if(!F||F.done)return;
+  stopAudio();
+  const w=F.deck[F.i];(known?F.known:F.again).push(w);F.i++;
+  if(F.i>=F.deck.length)flashDone();else flashCard();
+}
+function flashDone(){
+  F.done=true;const k=F.known.length,n=F.deck.length,bad=F.again.slice();
+  const msg=bad.length?'Слов, которые знаешь: '+k+' из '+n:'Ты знаешь все слова!';
+  render(MIXG,'narrow',[
+    h('div',{class:'top'},h('button',{class:'ic','aria-label':'К выбору разделов',html:BACK,onclick:mixScreen}),
+      h('h2',null,'Mix · карточки',h('small',null,'Готово'))),
+    h('div',{class:'qcard res'},
+      h('h2',null,msg),
+      h('p',null,bad.length?'Осталось повторить: '+bad.length+' '+pl(bad.length):'Можно взять новую колоду'),
+      bad.length?h('div',{class:'miss'},h('h3',null,'Повтори эти слова'),
+        h('div',{class:'chips'},bad.map(w=>h('button',{class:'chip',onclick:()=>speakText(audioList(w))},
+          pic(w,'mini'),h('div',null,h('b',null,w.disp),h('span',null,w.ru)))))):null,
+      h('div',{class:'acts'},
+        bad.length?h('button',{class:'btn primary',onclick:()=>flashPass(bad)},'Повторить сложные ('+bad.length+')'):null,
+        h('button',{class:bad.length?'btn':'btn primary',onclick:()=>{rollMix();flashPass(MIXG.words);}},'Новая колода'),
+        h('button',{class:'btn',onclick:mixScreen},'К выбору разделов')))
+  ]);
+}
+document.addEventListener('keydown',e=>{
+  if(!F||F.done)return;
+  if(e.key==='ArrowRight'){e.preventDefault();flashAnswer(true);}
+  else if(e.key==='ArrowLeft'){e.preventDefault();flashAnswer(false);}
+});
 
 /* ---------- level 1: dictionary ---------- */
 function dictionary(gid){
